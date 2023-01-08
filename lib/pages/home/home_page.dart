@@ -1,6 +1,8 @@
-import 'dart:io';
-import 'dart:typed_data';
+// ignore_for_file: no_leading_underscores_for_local_identifiers, avoid_print
 
+import 'dart:io';
+
+import 'package:collection/collection.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -9,16 +11,16 @@ import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:flutter_luban/flutter_luban.dart';
 import 'package:flutter_native_image/flutter_native_image.dart';
 import 'package:get/get.dart';
+import 'package:image_compression/image_compression.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mime/mime.dart';
 import 'package:path/path.dart' as p;
-import 'package:collection/collection.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'widgets/pinch_zoom_image.dart';
 
 
-enum CompressMethods {imageCompress,nativeImage,luban}
+enum CompressMethods {flutterImageCompress,flutterNativeImage,flutterLuban,imageCompression}
 
 
 class HomePage extends StatefulWidget {
@@ -32,7 +34,7 @@ class HomePage extends StatefulWidget {
 /* ============================================================================================= */
 
 class _HomePageState extends State<HomePage> {
-  var _method = CompressMethods.imageCompress;
+  var _method = CompressMethods.flutterImageCompress;
   File? imageFile;
   Image? image, imageCompressed;
   _ImageInfo? info, info2;
@@ -144,7 +146,7 @@ class _HomePageState extends State<HomePage> {
                       children: [
                         Text('Methods:', style: TextStyle(fontWeight: FontWeight.bold)),
                         ...CompressMethods.values.map((e) => RadioListTile<CompressMethods>(
-                          title: Text(describeEnum(e)),
+                          title: Text(describeEnum(e), style: TextStyle(fontSize: 12)),
                           value: e, 
                           groupValue: _method, 
                           dense: true,
@@ -177,24 +179,24 @@ class _HomePageState extends State<HomePage> {
                         ),
                         TextButton(
                           onPressed: getImageWithFilePicker, 
-                          child: Text('Select image'),
                           style: TextButton.styleFrom(
                             visualDensity: VisualDensity.compact,
                           ),
+                          child: Text('Select image'),
                         ),
                         ElevatedButton(
                           onPressed: compressImage, 
-                          child: Text('Apply Method'),
                           style: TextButton.styleFrom(
                             visualDensity: VisualDensity.compact,
                           ),
+                          child: Text('Apply Method'),
                         ),
                         TextButton(
                           onPressed: _clearCacheFiles, 
-                          child: Text('Clear cache'),
                           style: TextButton.styleFrom(
                             visualDensity: VisualDensity.compact,
                           ),
+                          child: Text('Clear cache'),
                         ),
                       ],
                     ),
@@ -257,7 +259,7 @@ class _HomePageState extends State<HomePage> {
         setState(() {});
       }
     } on PlatformException catch (e) {
-      _logException('Unsupported operation' + e.toString());
+      _logException('Unsupported operation $e');
     } catch (e) {
       _logException(e.toString());
     }
@@ -290,9 +292,10 @@ class _HomePageState extends State<HomePage> {
 
     if (info!.sizeKB >= 100) {
       switch (_method) {
-        case CompressMethods.imageCompress: compressWithImageCompress(); break;
-        case CompressMethods.nativeImage: compressWithNativeImage(); break;
-        case CompressMethods.luban: compressWithLuban(); break;
+        case CompressMethods.flutterImageCompress: compressWithFlutterImageCompress(); break;
+        case CompressMethods.flutterNativeImage: compressWithNativeImage(); break;
+        case CompressMethods.flutterLuban: compressWithLuban(); break;
+        case CompressMethods.imageCompression: compressWithImageCompression(); break;
         default:
       }
     } else {
@@ -301,7 +304,7 @@ class _HomePageState extends State<HomePage> {
     }
   }
   /* ---------------------------------------------------------------------------- */
-  void compressWithImageCompress() async {
+  void compressWithFlutterImageCompress() async {
     await FlutterImageCompress.compressWithFile(
       imageFile!.absolute.path,
       minWidth : 320,
@@ -377,6 +380,21 @@ class _HomePageState extends State<HomePage> {
       });
   }
   /* ---------------------------------------------------------------------------- */
+  void compressWithImageCompression() async {
+    final input = ImageFile(
+      filePath: imageFile!.path, 
+      rawBytes: imageFile!.readAsBytesSync(),
+      height: 320,
+      width: 240,
+    );
+    
+    await compressInQueue(ImageFileConfiguration(input: input))
+    .then((output) {
+      info2 = _ImageInfo.fromRaw(output.rawBytes);
+      imageCompressed = Image.memory(output.rawBytes, fit: BoxFit.contain);
+      setState(() {});
+    });
+  }
   /* ---------------------------------------------------------------------------- */
 }
 
