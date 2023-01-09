@@ -16,11 +16,19 @@ import 'package:image_picker/image_picker.dart';
 import 'package:mime/mime.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:image/image.dart' as im;
 
 import 'widgets/pinch_zoom_image.dart';
 
 
-enum CompressMethods {flutterImageCompress,flutterNativeImage,flutterLuban,imageCompression}
+enum CompressMethods {
+  flutterImageCompress,
+  flutterNativeImage,
+  flutterLuban,
+  imageCompression,
+  imagePicker,
+  dartLibrary,
+}
 
 
 class HomePage extends StatefulWidget {
@@ -41,6 +49,8 @@ class _HomePageState extends State<HomePage> {
   var _sliderValue = 80.0;
   final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
   PlatformFile? _file;
+  final _refWidth = 320;
+  final _refHeight = 240;
   /* ---------------------------------------------------------------------------- */
   @override
   void dispose() {
@@ -141,7 +151,7 @@ class _HomePageState extends State<HomePage> {
               Row(
                 children: [
                   Expanded(
-                    child: Column(
+                    child: Column( // =============> METHODS TO APPLY <=========================
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('Methods:', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -151,6 +161,10 @@ class _HomePageState extends State<HomePage> {
                           groupValue: _method, 
                           dense: true,
                           contentPadding: EdgeInsets.zero,
+                          visualDensity: VisualDensity(
+                            horizontal: VisualDensity.minimumDensity,
+                            vertical: VisualDensity.minimumDensity,
+                          ),
                           onChanged: (value) {
                             setState(() => _method = e);
                             if (imageCompressed != null) compressImage();
@@ -296,6 +310,8 @@ class _HomePageState extends State<HomePage> {
         case CompressMethods.flutterNativeImage: compressWithNativeImage(); break;
         case CompressMethods.flutterLuban: compressWithLuban(); break;
         case CompressMethods.imageCompression: compressWithImageCompression(); break;
+        case CompressMethods.imagePicker: compressWithImagePicker(); break;
+        case CompressMethods.dartLibrary: compressWithDartLibrary(); break;
         default:
       }
     } else {
@@ -307,8 +323,8 @@ class _HomePageState extends State<HomePage> {
   void compressWithFlutterImageCompress() async {
     await FlutterImageCompress.compressWithFile(
       imageFile!.absolute.path,
-      minWidth : 320,
-      minHeight: 240,
+      minWidth : _refWidth,
+      minHeight: _refHeight,
       quality: _sliderValue.truncate(),
     )
       .then((response) {
@@ -326,16 +342,14 @@ class _HomePageState extends State<HomePage> {
   }
   /* ---------------------------------------------------------------------------- */
   void compressWithNativeImage() async {
-    const _width = 320;
-    const _height = 240;
     late int _neoWidth, _neoHeight;
 
     if (info!.height.value > info!.width.value) {
-      _neoWidth = _width;
-      _neoHeight = (info!.height.value * _width / info!.width.value).round();
+      _neoWidth = _refWidth;
+      _neoHeight = (info!.height.value * _refWidth / info!.width.value).round();
     } else {
-      _neoWidth = (info!.width.value * _height / info!.height.value).round();
-      _neoHeight = _height;
+      _neoWidth = (info!.width.value * _refHeight / info!.height.value).round();
+      _neoHeight = _refHeight;
     }
 
     await FlutterNativeImage.compressImage(
@@ -384,8 +398,8 @@ class _HomePageState extends State<HomePage> {
     final input = ImageFile(
       filePath: imageFile!.path, 
       rawBytes: imageFile!.readAsBytesSync(),
-      height: 320,
-      width: 240,
+      height: _refHeight,
+      width: _refWidth,
     );
     
     await compressInQueue(ImageFileConfiguration(input: input))
@@ -396,7 +410,43 @@ class _HomePageState extends State<HomePage> {
     });
   }
   /* ---------------------------------------------------------------------------- */
+  void compressWithImagePicker() async {
+    await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: _sliderValue.truncate(),
+      maxHeight: _refHeight / 1,
+      // maxWidth: _refWidth / 1,
+    )
+    .then((output) async {
+      var bytes = await output?.readAsBytes();
+      info2 = bytes != null ? _ImageInfo.fromRaw(bytes) : null;
+      imageCompressed = bytes != null ? Image.memory(bytes) : null;
+      setState(() {});
+    })
+    ;
+  }
+  /* ---------------------------------------------------------------------------- */
+  // source: https://flutteragency.com/how-to-compress-image-before-uploading-to-firebase-and-flutter/
+  void compressWithDartLibrary() async {
+    var image = im.decodeImage(imageFile!.readAsBytesSync());
+    var takenWidth = info!.width.value < info!.height.value;
+    var smallerImg = im.copyResize(
+      image!, 
+      height: !takenWidth ? _refHeight : null, 
+      width: takenWidth ? _refWidth : null,
+    );
+    var compressed = im.encodeJpg(smallerImg, quality: _sliderValue.truncate());
+    var bytes = Uint8List.fromList(compressed);
+
+    info2 = _ImageInfo.fromRaw(bytes);
+    imageCompressed = Image.memory(bytes);
+    setState(() {});
+  }
+  /* ---------------------------------------------------------------------------- */
+  /* ---------------------------------------------------------------------------- */
 }
+
+// ============================================================================================
 
 const _headerBytes = {
   'jpg' : [0xFF,0xD8,0xFF,0xE1],
